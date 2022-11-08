@@ -478,7 +478,7 @@ static void e32_relocate(struct ta_elf *elf, unsigned int rel_sidx)
 	}
 }
 
-#ifdef ARM64
+#if defined(ARM64) || defined(RV64)
 static void e64_get_sym_name(const Elf64_Sym *sym_tab, size_t num_syms,
 			     const char *str_tab, size_t str_tab_size,
 			     Elf64_Rela *rela, const char **name,
@@ -518,6 +518,7 @@ static void e64_process_dyn_rela(const Elf64_Sym *sym_tab, size_t num_syms,
 	*where = val;
 }
 
+#ifdef ARM64
 static void e64_process_tls_tprel_rela(const Elf64_Sym *sym_tab,
 				       size_t num_syms, const char *str_tab,
 				       size_t str_tab_size, Elf64_Rela *rela,
@@ -570,6 +571,7 @@ static void e64_process_tlsdesc_rela(const Elf64_Sym *sym_tab, size_t num_syms,
 	e64_process_tls_tprel_rela(sym_tab, num_syms, str_tab, str_tab_size,
 				   rela, where + 1, elf);
 }
+#endif
 
 static void e64_relocate(struct ta_elf *elf, unsigned int rel_sidx)
 {
@@ -659,6 +661,14 @@ static void e64_relocate(struct ta_elf *elf, unsigned int rel_sidx)
 			 * here in case such entries exist.
 			 */
 			break;
+		case R_RISCV_RELATIVE:
+			*where = rela->r_addend + elf->load_addr;
+			break;
+		case R_RISCV_64:
+			e64_process_dyn_rela(sym_tab, num_syms, str_tab,
+					     str_tab_size, rela, where);
+			*where += rela->r_addend;
+			break;
 		case R_AARCH64_ABS64:
 			sym_idx = ELF64_R_SYM(rela->r_info);
 			if (sym_idx >= num_syms)
@@ -679,9 +689,11 @@ static void e64_relocate(struct ta_elf *elf, unsigned int rel_sidx)
 			break;
 		case R_AARCH64_GLOB_DAT:
 		case R_AARCH64_JUMP_SLOT:
+		case R_RISCV_JUMP_SLOT:
 			e64_process_dyn_rela(sym_tab, num_syms, str_tab,
 					     str_tab_size, rela, where);
 			break;
+#ifdef ARM64
 		case R_AARCH64_TLS_TPREL:
 			e64_process_tls_tprel_rela(sym_tab, num_syms, str_tab,
 						   str_tab_size, rela, where,
@@ -692,6 +704,7 @@ static void e64_relocate(struct ta_elf *elf, unsigned int rel_sidx)
 						 str_tab_size, rela, where,
 						 elf);
 			break;
+#endif
 		default:
 			err(TEE_ERROR_BAD_FORMAT, "Unknown relocation type %zd",
 			     ELF64_R_TYPE(rela->r_info));
